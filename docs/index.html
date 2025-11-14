@@ -1,0 +1,316 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docs</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__left">
+    <div class="stackedit__toc">
+      
+<ul>
+<li><a href="#💾-lifs-the-live-indexed-file-system-documentary">💾 LiFS: The Live Indexed File System Documentary</a>
+<ul>
+<li><a href="#🚀-the-next-generation-lifs-vs.-legacy-filesystems">🚀 The Next Generation: LiFS vs. Legacy Filesystems</a></li>
+<li><a href="#🛠️-block-reference-detailed-usage">🛠️ Block Reference: Detailed Usage</a></li>
+<li><a href="#🧭-design-principles-and-best-practices">🧭 Design Principles and Best Practices</a></li>
+</ul>
+</li>
+</ul>
+
+    </div>
+  </div>
+  <div class="stackedit__right">
+    <div class="stackedit__html">
+      <h1 id="💾-lifs-the-live-indexed-file-system-documentary">💾 LiFS: The Live Indexed File System Documentary</h1>
+<p><strong>LiFS</strong> (Live Indexed File System) is a production-ready TurboWarp extension that provides projects with a robust, persistent, and concurrent-safe virtual file system. Built directly atop the browser’s high-capacity <strong>IndexedDB</strong>, LiFS enables complex data persistence, save game functionality, and asset management—all within the safe sandboxed environment of a Scratch/TurboWarp project.</p>
+<p>LiFS is ideal for large-scale projects, high-frequency data logging, and any application where data integrity is non-negotiable.</p>
+<hr>
+<h2 id="🚀-the-next-generation-lifs-vs.-legacy-filesystems">🚀 The Next Generation: LiFS vs. Legacy Filesystems</h2>
+<p>LiFS was engineered as a direct evolution and superior replacement for older extensions like rxFS. Its architecture is explicitly designed to solve the critical concurrency and integrity issues found in earlier IndexedDB-based extensions, making it the definitive choice for serious project development.</p>
+<h3 id="why-concurrency-is-a-problem-in-scratch">Why Concurrency is a Problem in Scratch</h3>
+<p>Scratch and TurboWarp projects run blocks extremely fast—potentially thousands of blocks per second. When multiple sprites or clones attempt to save or update data simultaneously (e.g., saving user progress, logging game state, updating inventory counts), legacy asynchronous storage systems often break. They are susceptible to <strong>race conditions</strong>, where one save operation overwrites the partial results of another, leading to silent data corruption. LiFS eliminates this risk.</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">Feature</th>
+<th align="left">LiFS Advantage</th>
+<th align="left">Technical Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><strong>Concurrency Control</strong></td>
+<td align="left"><strong>Guaranteed Data Integrity.</strong></td>
+<td align="left"><strong>Operation Queue (Mutex):</strong> All file operations (read, write, delete, rename) are automatically placed into a simple mutex queue and executed sequentially. This prevents the possibility of concurrent data access and subsequent race conditions.</td>
+</tr>
+<tr>
+<td align="left"><strong>Transactional Robustness</strong></td>
+<td align="left"><strong>No Premature Resolution.</strong></td>
+<td align="left"><strong>Awaited Transactions:</strong> LiFS ensures transaction promises resolve <em>only after</em> the IndexedDB transaction has successfully completed and the extension’s internal validation logic has finalized. This prevents the Scratch VM from proceeding while the data write is still pending internally.</td>
+</tr>
+<tr>
+<td align="left"><strong>Platform Compatibility</strong></td>
+<td align="left"><strong>Works Seamlessly on TurboWarp &amp; Web Workers.</strong></td>
+<td align="left"><strong>Environment Fallback:</strong> It detects the TurboWarp <code>runtime.extensionManager</code> API first for complex file I/O (downloading/opening). This is vital because Web Worker environments, where extensions often run, restrict direct access to the DOM required for traditional file pickers and downloads.</td>
+</tr>
+<tr>
+<td align="left"><strong>Path Integrity</strong></td>
+<td align="left"><strong>Smart Path Handling &amp; Root Protection.</strong></td>
+<td align="left"><strong>Normalization &amp; Root Lock:</strong> A dedicated function ensures all paths are consistent (removing extra slashes, resolving <code>../</code>). Crucially, the root directory (<code>/</code>) is automatically created on load and is locked against deletion or renaming, preventing catastrophic project failure.</td>
+</tr>
+<tr>
+<td align="left"><strong>Recursive Safety</strong></td>
+<td align="left"><strong>No Data Corruption on Deletion.</strong></td>
+<td align="left"><strong>Pre-Scan &amp; Batching:</strong> Operations like recursive deletion (<code>delete item at /folder</code>) first reliably scan and collect all child paths (<code>/folder/a</code>, <code>/folder/b/c</code>), then delete them in a single, secure batch transaction. This avoids internal IndexedDB cursor errors that plague non-optimized recursive deletes.</td>
+</tr>
+</tbody>
+</table><hr>
+<h2 id="🛠️-block-reference-detailed-usage">🛠️ Block Reference: Detailed Usage</h2>
+<p>All paths in LiFS are <strong>absolute</strong> and start with the root directory: <code>/</code>.</p>
+<h3 id="initialization-and-system-status-establishing-your-storage">1. Initialization and System Status: Establishing Your Storage</h3>
+<p>These blocks manage the connection and lifespan of your data storage container (the IndexedDB database).</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">Block</th>
+<th align="left">Type</th>
+<th align="left">Description</th>
+<th align="left">Usage Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><strong><code>load LiFS namespace [NAME]</code></strong></td>
+<td align="left">Command</td>
+<td align="left"><strong>MANDATORY first step.</strong> Initializes the database connection. The <code>[NAME]</code> guarantees your data is isolated from other LiFS projects.</td>
+<td align="left">Use a descriptive name like <code>MyGame_v2_Saves</code>. The database connection is asynchronous; ensure you check <code>is LiFS ready?</code> before accessing data.</td>
+</tr>
+<tr>
+<td align="left"><strong><code>delete all LiFS data (reset)</code></strong></td>
+<td align="left">Command</td>
+<td align="left"><strong>DANGEROUS.</strong> Permanently deletes the entire LiFS database associated with the current namespace.</td>
+<td align="left">Only use this for factory-resetting or wiping save data. Requires <code>load LiFS</code> to be called again to restore the basic structure.</td>
+</tr>
+<tr>
+<td align="left"><strong><code>is LiFS ready?</code></strong></td>
+<td align="left">Boolean</td>
+<td align="left">Returns <code>true</code> once the IndexedDB is open and the root directory is confirmed.</td>
+<td align="left"><strong>Critical Guard:</strong> This should be used in a <code>wait until</code> block before any file creation or reading logic.</td>
+</tr>
+<tr>
+<td align="left"><strong><code>LiFS namespace</code></strong></td>
+<td align="left">Reporter</td>
+<td align="left">Returns the active namespace name.</td>
+<td align="left">Useful for debugging or displaying which save-slot/database is currently active.</td>
+</tr>
+<tr>
+<td align="left"><strong><code>last LiFS error (clears after reading)</code></strong></td>
+<td align="left">Reporter</td>
+<td align="left">Reports the last failure reason. Reading this value clears the stored error.</td>
+<td align="left">See Section 3 of Best Practices for debugging specific error messages like “Directory not found” or “Operation timed out.”</td>
+</tr>
+</tbody>
+</table><h3 id="data-persistence-and-manipulation-building-your-file-structure">2. Data Persistence and Manipulation: Building Your File Structure</h3>
+<p>LiFS treats all written content as <strong>strings</strong>. If you need to store complex data (lists, objects, numbers), you must use <strong>JSON serialization</strong> (e.g., Scratch’s <code>join</code> or custom JSON blocks) before writing and deserialize upon reading.</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">Block</th>
+<th align="left">Type</th>
+<th align="left">Description</th>
+<th align="left">Example Usage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><strong><code>create/overwrite file at [PATH] with content [CONTENT]</code></strong></td>
+<td align="left">Command</td>
+<td align="left">Writes <code>[CONTENT]</code> to the file. <strong>Parent directories must pre-exist.</strong></td>
+<td align="left"><code>create file at /saves/user_1.json with content (join '{"score":' score '}')</code></td>
+</tr>
+<tr>
+<td align="left"><strong><code>create directory at [PATH]</code></strong></td>
+<td align="left">Command</td>
+<td align="left">Creates a new folder.</td>
+<td align="left">To save assets: <code>create directory at /assets</code>.</td>
+</tr>
+<tr>
+<td align="left"><strong><code>delete item at [PATH]</code></strong></td>
+<td align="left">Command</td>
+<td align="left">Deletes a file or recursively deletes a directory and its contents.</td>
+<td align="left"><code>delete item at /old_assets</code> (removes all files and subfolders in <code>old_assets</code>).</td>
+</tr>
+<tr>
+<td align="left"><strong><code>rename/move item from [OLD_PATH] to [NEW_PATH]</code></strong></td>
+<td align="left">Command</td>
+<td align="left">Moves or renames an item.</td>
+<td align="left"><code>move item from /tmp/log.txt to /logs/final.txt</code> (Moves file). <code>move item from /assets to /graphics</code> (Moves folder and updates all child paths).</td>
+</tr>
+<tr>
+<td align="left"><strong><code>read file [PATH]</code></strong></td>
+<td align="left">Reporter</td>
+<td align="left">Returns the content of the file as a string.</td>
+<td align="left"><code>set inventory to (JSON parse (read file /data/inventory.json))</code></td>
+</tr>
+</tbody>
+</table><h3 id="file-system-inspection-and-reporting">3. File System Inspection and Reporting</h3>
+
+<table>
+<thead>
+<tr>
+<th align="left">Block</th>
+<th align="left">Type</th>
+<th align="left">Description</th>
+<th align="left">Example Results</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><strong><code>item exists at [PATH]?</code></strong></td>
+<td align="left">Boolean</td>
+<td align="left">Checks if any file or directory exists.</td>
+<td align="left"><code>item exists at /saves/user_2?</code> → <code>true</code></td>
+</tr>
+<tr>
+<td align="left"><strong><code>is [PATH] a directory?</code></strong></td>
+<td align="left">Boolean</td>
+<td align="left">Returns <code>true</code> only if the item is a folder.</td>
+<td align="left"><code>is /data/config.txt a directory?</code> → <code>false</code></td>
+</tr>
+<tr>
+<td align="left"><strong><code>list [TYPE] in [PATH] (JSON list)</code></strong></td>
+<td align="left">Reporter</td>
+<td align="left">Returns a <strong>JSON string array</strong> of the names of items immediately contained in <code>[PATH]</code>.</td>
+<td align="left"><code>list files in /assets</code> → <code>["player.png", "bg.jpg"]</code></td>
+</tr>
+<tr>
+<td align="left"><strong><code>property [PROPERTY] of item [PATH]</code></strong></td>
+<td align="left">Reporter</td>
+<td align="left">Returns specific metadata. The <code>size</code> property returns the string length of the file content in bytes.</td>
+<td align="left"><code>property size of item /saves/auto.dat</code> → <code>4096</code> (for 4KB of data)</td>
+</tr>
+</tbody>
+</table><h3 id="backup-export-and-import">4. Backup, Export, and Import</h3>
+<p>These blocks are essential for portability, allowing users to move their data between computers or projects.</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">Block</th>
+<th align="left">Type</th>
+<th align="left">Description</th>
+<th align="left">Implication for Developers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><strong><code>export LiFS to file (.lifs)</code></strong></td>
+<td align="left">Command</td>
+<td align="left">Downloads a single, compressed JSON file (<code>.lifs</code>) containing the entire contents of the current namespace.</td>
+<td align="left">Ideal for creating a reliable “Backup Save” or for debugging the complete file system structure outside the browser.</td>
+</tr>
+<tr>
+<td align="left"><strong><code>import LiFS from file picker (overwrites existing)</code></strong></td>
+<td align="left">Command</td>
+<td align="left">Prompts the user to select a <code>.lifs</code> file. The imported data is merged with (overwriting where paths conflict) the existing LiFS namespace.</td>
+<td align="left">This enables save file migration and asset injection by users. Note that the import operation itself is also placed in the Operation Queue for integrity.</td>
+</tr>
+</tbody>
+</table><hr>
+<h2 id="🧭-design-principles-and-best-practices">🧭 Design Principles and Best Practices</h2>
+<p>To ensure maximum stability and reliability in your projects, follow these principles when using LiFS.</p>
+<h3 id="the-importance-of-path-normalization-and-structure">1. The Importance of Path Normalization and Structure</h3>
+<p>LiFS guarantees path consistency, but developers should still maintain a clear directory structure for maintainability.</p>
+<p><strong>Internal Working of Normalization:</strong><br>
+When you provide an input like <code>../data//temp.log</code>, the <code>normalizePath</code> function performs three sequential steps before interacting with the database:</p>
+<ol>
+<li><strong>Slashes:</strong> Replaces all <code>\\</code> (backslashes) with <code>/</code> (forward slashes).</li>
+<li><strong>Redundancy:</strong> Replaces all instances of <code>//</code> with a single <code>/</code>.</li>
+<li><strong>Relative Resolution:</strong> Resolves <code>.</code> (current directory) and <code>..</code> (parent directory), stopping safely at the root. For example, <code>../../project.json</code> in any context will simply become <code>/project.json</code>.</li>
+</ol>
+<p><strong>Best Practice for Structure:</strong><br>
+Establish dedicated folders immediately after <code>load LiFS</code>:</p>
+<ul>
+<li><code>/saves/</code>: For save game states and user progress.</li>
+<li><code>/config/</code>: For non-volatile settings (graphics options, keybindings).</li>
+<li><code>/logs/</code>: For in-game logs or error reports.</li>
+</ul>
+<h3 id="concurrent-operations-the-power-of-the-operation-queue">2. Concurrent Operations: The Power of the Operation Queue</h3>
+<p>The Operation Queue is the single most important architectural feature of LiFS.</p>
+<p><strong>The Race Condition Scenario (Before LiFS):</strong><br>
+Imagine two sprites running simultaneously:</p>
+<ul>
+<li><strong>Sprite A (Save):</strong> Reads old score (<code>100</code>), calculates new score (<code>110</code>), starts writing <code>110</code>.</li>
+<li><strong>Sprite B (Log):</strong> Reads log file content, starts appending a log entry.</li>
+</ul>
+<p>If both write operations hit the database at the same <em>millisecond</em>, the IndexedDB could become locked or corrupt, resulting in either a failed transaction or partial data.</p>
+<p><strong>The LiFS Solution:</strong><br>
+LiFS forces these operations into a sequence:</p>
+<ol>
+<li><strong>Queue Entry:</strong> Sprite A’s write request enters the queue.</li>
+<li><strong>Execution:</strong> Sprite A completes the transaction successfully.</li>
+<li><strong>Queue Entry:</strong> Sprite B’s write request enters the queue.</li>
+<li><strong>Execution:</strong> Sprite B completes successfully.</li>
+</ol>
+<p>This guarantee means you can safely initiate multiple LiFS blocks inside forever loops, parallel scripts, or from many clones without needing to add manual <code>wait 0 seconds</code> blocks or complex inter-sprite messaging systems to manage database access.</p>
+<h3 id="robust-error-handling-and-debugging">3. Robust Error Handling and Debugging</h3>
+<p>The <code>last LiFS error</code> block is your primary debugging tool. Since LiFS commands are placed in the queue, errors are <em>asynchronous</em>.</p>
+<p><strong>Debugging Workflow:</strong></p>
+<ol>
+<li>Call a LiFS command (e.g., <code>delete item at /non_existent_path</code>).</li>
+<li>Wait a short time (e.g., <code>wait 0.1 seconds</code>).</li>
+<li>Check the <code>last LiFS error</code> block.</li>
+</ol>
+<p>Common Errors You May Encounter:</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">Error Message</th>
+<th align="left">Implication</th>
+<th align="left">Developer Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><code>"Directory not found: [PATH]"</code></td>
+<td align="left">You tried to create a file, but the parent folder doesn’t exist.</td>
+<td align="left">Use <code>create directory at [Parent Path]</code> first.</td>
+</tr>
+<tr>
+<td align="left"><code>"Item is a directory, content not allowed."</code></td>
+<td align="left">You tried to use <code>create file...</code> on a path that is already a folder.</td>
+<td align="left">Use <code>delete item</code> first if you want to overwrite the folder with a file.</td>
+</tr>
+<tr>
+<td align="left"><code>"Cannot rename/move item to an existing path."</code></td>
+<td align="left">The <code>NEW_PATH</code> already contains a file/folder and cannot be overwritten.</td>
+<td align="left">Delete the item at <code>NEW_PATH</code> first.</td>
+</tr>
+<tr>
+<td align="left"><code>"Cannot delete root directory."</code></td>
+<td align="left">You attempted to delete <code>/</code>.</td>
+<td align="left">This is a safety feature; use <code>delete all LiFS data (reset)</code> instead.</td>
+</tr>
+</tbody>
+</table><h3 id="storage-limits-isolation-and-persistence">4. Storage Limits, Isolation, and Persistence</h3>
+<p><strong>Storage Limits:</strong><br>
+While IndexedDB is vast, it is still subject to the browser’s disk space quotas. Typically, modern browsers offer many gigabytes of storage, far exceeding the needs of any Scratch project. LiFS handles all data sizing and storage automatically; you just need to be mindful of saving extremely large, complex strings frequently.</p>
+<p><strong>Data Isolation:</strong><br>
+The use of the <code>namespace</code> is crucial. Data stored in <code>namespace A</code> is completely inaccessible from a project loading <code>namespace B</code>. This ensures data from different games or different users does not conflict.</p>
+<p><strong>Persistence:</strong><br>
+Data is persistent across browser restarts and computer shutdowns. However, LiFS data is deleted if the user manually <strong>clears their browser’s site data or cache</strong>. It is essential to educate users on this distinction, which is why the <strong>Export/Import</strong> blocks are provided for user-managed backups. If the browser is in “Private/Incognito” mode, IndexedDB storage may be temporarily cleared upon closing the window.</p>
+
+    </div>
+  </div>
+</body>
+
+</html>
