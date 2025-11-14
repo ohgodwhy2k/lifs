@@ -1,3 +1,5 @@
+![enter image description here](https://raw.githubusercontent.com/ohgodwhy2k/lifs/refs/heads/main/docs/mdbanner.png)
+
 # Intro to LiFS
 
 **LiFS** (Live Indexed File System) is the next evolution of in-browser virtual file storage for TurboWarp and Scratch projects. Built on top of the browser's high-capacity **IndexedDB**, LiFS provides a **robust, persistent, and production-ready** environment for saving and managing user data, complex game states, and assets with real-time stability.
