@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Docs</title>
+  <title>rxFS+ Documentary</title>
   <link rel="stylesheet" href="https://stackedit.io/style.css" />
 </head>
 
@@ -13,11 +13,11 @@
     <div class="stackedit__toc">
       
 <ul>
-<li><a href="#💾-lifs-the-live-indexed-file-system-documentary">💾 LiFS: The Live Indexed File System Documentary</a>
+<li><a href="#📁-rxfs-extension-documentation">📁 rxFS+ Extension Documentation</a>
 <ul>
-<li><a href="#🚀-the-next-generation-lifs-vs.-legacy-filesystems">🚀 The Next Generation: LiFS vs. Legacy Filesystems</a></li>
-<li><a href="#🛠️-block-reference-detailed-usage">🛠️ Block Reference: Detailed Usage</a></li>
-<li><a href="#🧭-design-principles-and-best-practices">🧭 Design Principles and Best Practices</a></li>
+<li><a href="#overview">1. Overview</a></li>
+<li><a href="#block-reference">2. Block Reference</a></li>
+<li><a href="#common-workflows--examples">3. Common Workflows & Examples</a></li>
 </ul>
 </li>
 </ul>
@@ -26,288 +26,1011 @@
   </div>
   <div class="stackedit__right">
     <div class="stackedit__html">
-      <h1 id="💾-lifs-the-live-indexed-file-system-documentary">💾 LiFS: The Live Indexed File System Documentary</h1>
-<p><strong>LiFS</strong> (Live Indexed File System) is a production-ready TurboWarp extension that provides projects with a robust, persistent, and concurrent-safe virtual file system. Built directly atop the browser’s high-capacity <strong>IndexedDB</strong>, LiFS enables complex data persistence, save game functionality, and asset management—all within the safe sandboxed environment of a Scratch/TurboWarp project.</p>
-<p>LiFS is ideal for large-scale projects, high-frequency data logging, and any application where data integrity is non-negotiable.</p>
+      <blockquote>
+<p>In the code snippets, JavaScript pseudocode is written. This is a TurboWarp extension, not a JS library. A JS library might be made for rxFS+.</p>
+</blockquote>
+<h1 id="📁-rxfs-extension-documentation">📁 rxFS+ Extension Documentation</h1>
+<h2 id="overview">1. Overview</h2>
+<p><strong>rxFS+</strong> is a Scratch extension that provides blocks for interacting with a virtual, <strong>in-memory, Unix-like filesystem</strong>. This allows you to create, read, write, and manage a complete file and directory structure entirely within your Scratch project.</p>
+<ul>
+<li>
+<p><strong>ID:</strong> <code>lithsoft.rxfsplus</code></p>
+</li>
+<li>
+<p><strong>Author:</strong> ohgodwhy2k</p>
+</li>
+<li>
+<p><strong>License:</strong> Creative Commons Zero v1.0</p>
+</li>
+</ul>
+<h3 id="🧭-key-concepts">🧭 Key Concepts</h3>
+<p>Before you begin, you <em>must</em> understand these core principles:</p>
+<ol>
+<li>
+<p><strong>In-Memory Storage:</strong> The filesystem is <strong>not permanent</strong>. It exists only in the project’s memory. If you reload the page or close the project, <strong>all files and directories will be lost</strong>. To save your filesystem, you must use the <code>(export file system)</code> block and save the resulting string (e.g., in a list, cloud variable, or by downloading it). You can then use the <code>import file system from []</code> block to restore it later.</p>
+</li>
+<li>
+<p><strong>Unix-like Paths:</strong> The filesystem uses a path structure similar to Linux or macOS.</p>
+<ul>
+<li>
+<p>The root (the “base”) of the filesystem is <code>/</code>.</p>
+</li>
+<li>
+<p>Paths are separated by a forward slash: <code>/path/to/file.txt</code>.</p>
+</li>
+<li>
+<p>The extension automatically normalizes paths: <code>//a/b/</code> will be treated as <code>/a/b</code>.</p>
+</li>
+<li>
+<p>All paths are <strong>absolute</strong> (they must start from the root <code>/</code>).</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Error Handling:</strong> This is the most important concept. Most blocks <strong>will not stop your script</strong> if they fail. Instead, they set an internal error message. You <strong>must</strong> check this message using the <code>(last error)</code> block immediately after running a command.</p>
+<ul>
+<li>
+<p>A successful operation will set <code>(last error)</code> to an empty string (<code>""</code>).</p>
+</li>
+<li>
+<p>A failed operation (e.g., “File not found”) will set <code>(last error)</code> to that message.</p>
+</li>
+</ul>
+</li>
+</ol>
+<p><strong>Typical Error-Checking Pattern:</strong></p>
+<p>Code snippet</p>
+<pre><code>write [Hello!] to file [/greeting.txt]
+if &lt;(last error) = []&gt; then
+  say [File written successfully!]
+else
+  say (join [Error: ] (last error))
+end
+
+</code></pre>
 <hr>
-<h2 id="🚀-the-next-generation-lifs-vs.-legacy-filesystems">🚀 The Next Generation: LiFS vs. Legacy Filesystems</h2>
-<p>LiFS was engineered as a direct evolution and superior replacement for older extensions like rxFS. Its architecture is explicitly designed to solve the critical concurrency and integrity issues found in earlier IndexedDB-based extensions, making it the definitive choice for serious project development.</p>
-<h3 id="why-concurrency-is-a-problem-in-scratch">Why Concurrency is a Problem in Scratch</h3>
-<p>Scratch and TurboWarp projects run blocks extremely fast—potentially thousands of blocks per second. When multiple sprites or clones attempt to save or update data simultaneously (e.g., saving user progress, logging game state, updating inventory counts), legacy asynchronous storage systems often break. They are susceptible to <strong>race conditions</strong>, where one save operation overwrites the partial results of another, leading to silent data corruption. LiFS eliminates this risk.</p>
-
-<table>
-<thead>
-<tr>
-<th align="left">Feature</th>
-<th align="left">LiFS Advantage</th>
-<th align="left">Technical Detail</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td align="left"><strong>Concurrency Control</strong></td>
-<td align="left"><strong>Guaranteed Data Integrity.</strong></td>
-<td align="left"><strong>Operation Queue (Mutex):</strong> All file operations (read, write, delete, rename) are automatically placed into a simple mutex queue and executed sequentially. This prevents the possibility of concurrent data access and subsequent race conditions.</td>
-</tr>
-<tr>
-<td align="left"><strong>Transactional Robustness</strong></td>
-<td align="left"><strong>No Premature Resolution.</strong></td>
-<td align="left"><strong>Awaited Transactions:</strong> LiFS ensures transaction promises resolve <em>only after</em> the IndexedDB transaction has successfully completed and the extension’s internal validation logic has finalized. This prevents the Scratch VM from proceeding while the data write is still pending internally.</td>
-</tr>
-<tr>
-<td align="left"><strong>Platform Compatibility</strong></td>
-<td align="left"><strong>Works Seamlessly on TurboWarp &amp; Web Workers.</strong></td>
-<td align="left"><strong>Environment Fallback:</strong> It detects the TurboWarp <code>runtime.extensionManager</code> API first for complex file I/O (downloading/opening). This is vital because Web Worker environments, where extensions often run, restrict direct access to the DOM required for traditional file pickers and downloads.</td>
-</tr>
-<tr>
-<td align="left"><strong>Path Integrity</strong></td>
-<td align="left"><strong>Smart Path Handling &amp; Root Protection.</strong></td>
-<td align="left"><strong>Normalization &amp; Root Lock:</strong> A dedicated function ensures all paths are consistent (removing extra slashes, resolving <code>../</code>). Crucially, the root directory (<code>/</code>) is automatically created on load and is locked against deletion or renaming, preventing catastrophic project failure.</td>
-</tr>
-<tr>
-<td align="left"><strong>Recursive Safety</strong></td>
-<td align="left"><strong>No Data Corruption on Deletion.</strong></td>
-<td align="left"><strong>Pre-Scan &amp; Batching:</strong> Operations like recursive deletion (<code>delete item at /folder</code>) first reliably scan and collect all child paths (<code>/folder/a</code>, <code>/folder/b/c</code>), then delete them in a single, secure batch transaction. This avoids internal IndexedDB cursor errors that plague non-optimized recursive deletes.</td>
-</tr>
-</tbody>
-</table><hr>
-<h2 id="🛠️-block-reference-detailed-usage">🛠️ Block Reference: Detailed Usage</h2>
-<p>All paths in LiFS are <strong>absolute</strong> and start with the root directory: <code>/</code>.</p>
-<h3 id="initialization-and-system-status-establishing-your-storage">1. Initialization and System Status: Establishing Your Storage</h3>
-<p>These blocks manage the connection and lifespan of your data storage container (the IndexedDB database).</p>
-
-<table>
-<thead>
-<tr>
-<th align="left">Block</th>
-<th align="left">Type</th>
-<th align="left">Description</th>
-<th align="left">Usage Notes</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td align="left"><strong><code>load LiFS namespace [NAME]</code></strong></td>
-<td align="left">Command</td>
-<td align="left"><strong>MANDATORY first step.</strong> Initializes the database connection. The <code>[NAME]</code> guarantees your data is isolated from other LiFS projects.</td>
-<td align="left">Use a descriptive name like <code>MyGame_v2_Saves</code>. The database connection is asynchronous; ensure you check <code>is LiFS ready?</code> before accessing data.</td>
-</tr>
-<tr>
-<td align="left"><strong><code>delete all LiFS data (reset)</code></strong></td>
-<td align="left">Command</td>
-<td align="left"><strong>DANGEROUS.</strong> Permanently deletes the entire LiFS database associated with the current namespace.</td>
-<td align="left">Only use this for factory-resetting or wiping save data. Requires <code>load LiFS</code> to be called again to restore the basic structure.</td>
-</tr>
-<tr>
-<td align="left"><strong><code>is LiFS ready?</code></strong></td>
-<td align="left">Boolean</td>
-<td align="left">Returns <code>true</code> once the IndexedDB is open and the root directory is confirmed.</td>
-<td align="left"><strong>Critical Guard:</strong> This should be used in a <code>wait until</code> block before any file creation or reading logic.</td>
-</tr>
-<tr>
-<td align="left"><strong><code>LiFS namespace</code></strong></td>
-<td align="left">Reporter</td>
-<td align="left">Returns the active namespace name.</td>
-<td align="left">Useful for debugging or displaying which save-slot/database is currently active.</td>
-</tr>
-<tr>
-<td align="left"><strong><code>last LiFS error (clears after reading)</code></strong></td>
-<td align="left">Reporter</td>
-<td align="left">Reports the last failure reason. Reading this value clears the stored error.</td>
-<td align="left">See Section 3 of Best Practices for debugging specific error messages like “Directory not found” or “Operation timed out.”</td>
-</tr>
-</tbody>
-</table><h3 id="data-persistence-and-manipulation-building-your-file-structure">2. Data Persistence and Manipulation: Building Your File Structure</h3>
-<p>LiFS treats all written content as <strong>strings</strong>. If you need to store complex data (lists, objects, numbers), you must use <strong>JSON serialization</strong> (e.g., Scratch’s <code>join</code> or custom JSON blocks) before writing and deserialize upon reading.</p>
-
-<table>
-<thead>
-<tr>
-<th align="left">Block</th>
-<th align="left">Type</th>
-<th align="left">Description</th>
-<th align="left">Example Usage</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td align="left"><strong><code>create/overwrite file at [PATH] with content [CONTENT]</code></strong></td>
-<td align="left">Command</td>
-<td align="left">Writes <code>[CONTENT]</code> to the file. <strong>Parent directories must pre-exist.</strong></td>
-<td align="left"><code>create file at /saves/user_1.json with content (join '{"score":' score '}')</code></td>
-</tr>
-<tr>
-<td align="left"><strong><code>create directory at [PATH]</code></strong></td>
-<td align="left">Command</td>
-<td align="left">Creates a new folder.</td>
-<td align="left">To save assets: <code>create directory at /assets</code>.</td>
-</tr>
-<tr>
-<td align="left"><strong><code>delete item at [PATH]</code></strong></td>
-<td align="left">Command</td>
-<td align="left">Deletes a file or recursively deletes a directory and its contents.</td>
-<td align="left"><code>delete item at /old_assets</code> (removes all files and subfolders in <code>old_assets</code>).</td>
-</tr>
-<tr>
-<td align="left"><strong><code>rename/move item from [OLD_PATH] to [NEW_PATH]</code></strong></td>
-<td align="left">Command</td>
-<td align="left">Moves or renames an item.</td>
-<td align="left"><code>move item from /tmp/log.txt to /logs/final.txt</code> (Moves file). <code>move item from /assets to /graphics</code> (Moves folder and updates all child paths).</td>
-</tr>
-<tr>
-<td align="left"><strong><code>read file [PATH]</code></strong></td>
-<td align="left">Reporter</td>
-<td align="left">Returns the content of the file as a string.</td>
-<td align="left"><code>set inventory to (JSON parse (read file /data/inventory.json))</code></td>
-</tr>
-</tbody>
-</table><h3 id="file-system-inspection-and-reporting">3. File System Inspection and Reporting</h3>
-
-<table>
-<thead>
-<tr>
-<th align="left">Block</th>
-<th align="left">Type</th>
-<th align="left">Description</th>
-<th align="left">Example Results</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td align="left"><strong><code>item exists at [PATH]?</code></strong></td>
-<td align="left">Boolean</td>
-<td align="left">Checks if any file or directory exists.</td>
-<td align="left"><code>item exists at /saves/user_2?</code> → <code>true</code></td>
-</tr>
-<tr>
-<td align="left"><strong><code>is [PATH] a directory?</code></strong></td>
-<td align="left">Boolean</td>
-<td align="left">Returns <code>true</code> only if the item is a folder.</td>
-<td align="left"><code>is /data/config.txt a directory?</code> → <code>false</code></td>
-</tr>
-<tr>
-<td align="left"><strong><code>list [TYPE] in [PATH] (JSON list)</code></strong></td>
-<td align="left">Reporter</td>
-<td align="left">Returns a <strong>JSON string array</strong> of the names of items immediately contained in <code>[PATH]</code>.</td>
-<td align="left"><code>list files in /assets</code> → <code>["player.png", "bg.jpg"]</code></td>
-</tr>
-<tr>
-<td align="left"><strong><code>property [PROPERTY] of item [PATH]</code></strong></td>
-<td align="left">Reporter</td>
-<td align="left">Returns specific metadata. The <code>size</code> property returns the string length of the file content in bytes.</td>
-<td align="left"><code>property size of item /saves/auto.dat</code> → <code>4096</code> (for 4KB of data)</td>
-</tr>
-</tbody>
-</table><h3 id="backup-export-and-import">4. Backup, Export, and Import</h3>
-<p>These blocks are essential for portability, allowing users to move their data between computers or projects.</p>
-
-<table>
-<thead>
-<tr>
-<th align="left">Block</th>
-<th align="left">Type</th>
-<th align="left">Description</th>
-<th align="left">Implication for Developers</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td align="left"><strong><code>export LiFS to file (.lifs)</code></strong></td>
-<td align="left">Command</td>
-<td align="left">Downloads a single, compressed JSON file (<code>.lifs</code>) containing the entire contents of the current namespace.</td>
-<td align="left">Ideal for creating a reliable “Backup Save” or for debugging the complete file system structure outside the browser.</td>
-</tr>
-<tr>
-<td align="left"><strong><code>import LiFS from file picker (overwrites existing)</code></strong></td>
-<td align="left">Command</td>
-<td align="left">Prompts the user to select a <code>.lifs</code> file. The imported data is merged with (overwriting where paths conflict) the existing LiFS namespace.</td>
-<td align="left">This enables save file migration and asset injection by users. Note that the import operation itself is also placed in the Operation Queue for integrity.</td>
-</tr>
-</tbody>
-</table><hr>
-<h2 id="🧭-design-principles-and-best-practices">🧭 Design Principles and Best Practices</h2>
-<p>To ensure maximum stability and reliability in your projects, follow these principles when using LiFS.</p>
-<h3 id="the-importance-of-path-normalization-and-structure">1. The Importance of Path Normalization and Structure</h3>
-<p>LiFS guarantees path consistency, but developers should still maintain a clear directory structure for maintainability.</p>
-<p><strong>Internal Working of Normalization:</strong><br>
-When you provide an input like <code>../data//temp.log</code>, the <code>normalizePath</code> function performs three sequential steps before interacting with the database:</p>
-<ol>
-<li><strong>Slashes:</strong> Replaces all <code>\\</code> (backslashes) with <code>/</code> (forward slashes).</li>
-<li><strong>Redundancy:</strong> Replaces all instances of <code>//</code> with a single <code>/</code>.</li>
-<li><strong>Relative Resolution:</strong> Resolves <code>.</code> (current directory) and <code>..</code> (parent directory), stopping safely at the root. For example, <code>../../project.json</code> in any context will simply become <code>/project.json</code>.</li>
-</ol>
-<p><strong>Best Practice for Structure:</strong><br>
-Establish dedicated folders immediately after <code>load LiFS</code>:</p>
+<h2 id="block-reference">2. Block Reference</h2>
+<p>The blocks are grouped by their function.</p>
+<h3 id="⚠️-error-handling">⚠️ Error Handling</h3>
+<p>This is the most important block. Check it after every command.</p>
+<h4 id="last-error"><code>(last error)</code></h4>
 <ul>
-<li><code>/saves/</code>: For save game states and user progress.</li>
-<li><code>/config/</code>: For non-volatile settings (graphics options, keybindings).</li>
-<li><code>/logs/</code>: For in-game logs or error reports.</li>
+<li>
+<p><strong>Block:</strong> <code>(last error)</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the error message from the last filesystem operation. If the operation was successful, this block returns an <strong>empty string</strong>.</p>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - The error message, or <code>""</code> if no error occurred.</p>
+</li>
 </ul>
-<h3 id="concurrent-operations-the-power-of-the-operation-queue">2. Concurrent Operations: The Power of the Operation Queue</h3>
-<p>The Operation Queue is the single most important architectural feature of LiFS.</p>
-<p><strong>The Race Condition Scenario (Before LiFS):</strong><br>
-Imagine two sprites running simultaneously:</p>
+<hr>
+<h3 id="🗂️-file--directory-creation">🗂️ File &amp; Directory Creation</h3>
+<p>These blocks create new items in the filesystem.</p>
+<h4 id="create-file-str"><code>create file [STR]</code></h4>
 <ul>
-<li><strong>Sprite A (Save):</strong> Reads old score (<code>100</code>), calculates new score (<code>110</code>), starts writing <code>110</code>.</li>
-<li><strong>Sprite B (Log):</strong> Reads log file content, starts appending a log entry.</li>
+<li>
+<p><strong>Block:</strong> <code>create file [/path/to/file.txt]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Creates a new, empty file at the specified path.</p>
+<ul>
+<li>
+<p>If the file already exists, it <strong>truncates</strong> it (empties its content).</p>
+</li>
+<li>
+<p>If any parent directories (like <code>/path/to</code>) do not exist, they will be <strong>automatically created</strong>.</p>
+</li>
 </ul>
-<p>If both write operations hit the database at the same <em>millisecond</em>, the IndexedDB could become locked or corrupt, resulting in either a failed transaction or partial data.</p>
-<p><strong>The LiFS Solution:</strong><br>
-LiFS forces these operations into a sequence:</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The full, absolute path for the file to create.</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Invalid path"</code>: If the path is invalid (e.L., <code>""</code> or just <code>/</code>).</p>
+</li>
+<li>
+<p><code>"Path is a directory"</code>: If an item at that path already exists and it is a directory.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="create-directory-str"><code>create directory [STR]</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>create directory [/path/to/directory]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Creates a new, empty directory at the specified path.</p>
+<ul>
+<li>
+<p>If the directory already exists, this block does nothing.</p>
+</li>
+<li>
+<p>If any parent directories (like <code>/path/to</code>) do not exist, they will be <strong>automatically created</strong>.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The full, absolute path for the directory to create.</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Invalid path"</code>: If the path is invalid.</p>
+</li>
+<li>
+<p><code>"Path is a file"</code>: If an item at that path already exists and it is a file.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="write-str2-to-file-str"><code>write [STR2] to file [STR]</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>write [rxFS+ is good!] to file [/path/to/file.txt]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Writes content to a file.</p>
+<ul>
+<li>
+<p>If the file <strong>does not exist</strong>, it will be <strong>created</strong>, along with any missing parent directories.</p>
+</li>
+<li>
+<p>If the file <strong>does exist</strong>, its content will be <strong>completely overwritten</strong>.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li>
+<p><code>[STR2]</code>: The content to write into the file.</p>
+</li>
+<li>
+<p><code>[STR]</code>: The full path of the file.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Invalid path"</code>: If the path is invalid.</p>
+</li>
+<li>
+<p><code>"Path is a directory"</code>: If the path points to an existing directory.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="append-str2-to-file-str"><code>append [STR2] to file [STR]</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>append [ more text] to file [/path/to/file.txt]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Adds text to the <em>end</em> of an existing file.</p>
+<ul>
+<li><strong>Crucially:</strong> This block <strong>will not</strong> create a new file or missing directories. The file must already exist.</li>
+</ul>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li>
+<p><code>[STR2]</code>: The content to append.</p>
+</li>
+<li>
+<p><code>[STR]</code>: The full path of the existing file.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Path not found"</code>: If the path (or its parent directories) does not exist.</p>
+</li>
+<li>
+<p><code>"File not found"</code>: If the path is valid but the file doesn’t exist.</p>
+</li>
+<li>
+<p><code>"Path is a directory"</code>: If the path points to a directory.</p>
+</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="📖-reading-data">📖 Reading Data</h3>
+<p>These blocks retrieve content.</p>
+<h4 id="read-file-str"><code>(read file [STR])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(read file [/path/to/file.txt])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Reads and returns the full text content of a file.</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The full path of the file to read.</li>
+</ul>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - The content of the file. Returns an empty string (<code>""</code>) if the file is empty or an error occurs.</p>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"File not found"</code>: If the file does not exist.</p>
+</li>
+<li>
+<p><code>"Path is a directory"</code>: If the path points to a directory.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="load-str-from-the-web"><code>(load [STR] from the web)</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(load [https://.../hello.txt] from the web)</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter (Asynchronous)</p>
+</li>
+<li>
+<p><strong>Description:</strong> Fetches the text content from a URL.</p>
+<ul>
+<li>
+<p><strong>This block does NOT save the content to the filesystem.</strong> It only returns the text. You must use <code>(write ...)</code> to save it.</p>
+</li>
+<li>
+<p>Because it’s asynchronous, it will “wait” until the web request is complete.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The URL to fetch (e.g., a URL to a text file or API).</li>
+</ul>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - The text content from the URL.</p>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li><code>"Web request failed"</code>: If the fetch fails (e.g., URL not found, network error, CORS issue).</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="♻️-filesystem-operations">♻️ Filesystem Operations</h3>
+<p>These blocks move, copy, and delete items.</p>
+<h4 id="remove-str"><code>remove [STR]</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>remove [/path/to/file.txt]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Deletes a file or directory. If a directory is specified, it deletes the directory <strong>and everything inside it recursively</strong>.</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The path of the file or directory to delete.</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Cannot remove root"</code>: You cannot delete the <code>/</code> directory.</p>
+</li>
+<li>
+<p><code>"Path not found"</code>: The item to be removed does not exist.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="move-str-to-str2"><code>move [STR] to [STR2]</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>move [/path/to/source] to [/path/to/destination]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Moves a file or directory from one location to another (a “rename”).</p>
+<ul>
+<li>
+<p>This block <strong>will not overwrite</strong>. The destination path must not already exist.</p>
+</li>
+<li>
+<p>Any missing parent directories for the destination (<code>/path/to</code>) will be created.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li>
+<p><code>[STR]</code>: The source path of the item to move.</p>
+</li>
+<li>
+<p><code>[STR2]</code>: The new destination path.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Cannot move root"</code>: You cannot move the <code>/</code> directory.</p>
+</li>
+<li>
+<p><code>"Cannot move a directory into itself"</code>: e.g., moving <code>/data</code> to <code>/data/backup</code>.</p>
+</li>
+<li>
+<p><code>"Source path not found"</code>: The item at <code>[STR]</code> doesn’t exist.</p>
+</li>
+<li>
+<p><code>"Invalid destination path"</code>: The <code>[STR2]</code> path is invalid.</p>
+</li>
+<li>
+<p><code>"Destination path already exists"</code>: An item at <code>[STR2]</code> already exists.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="copy-str-to-str2"><code>copy [STR] to [STR2]</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>copy [/path/to/source] to [/path/to/destination]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Creates a deep copy of a file or directory at a new location.</p>
+<ul>
+<li>
+<p>This block <strong>will not overwrite</strong>. The destination path must not already exist.</p>
+</li>
+<li>
+<p>Any missing parent directories for the destination (<code>/path/to</code>) will be created.</p>
+</li>
+<li>
+<p>If copying a directory, all its contents are copied recursively.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li>
+<p><code>[STR]</code>: The source path of the item to copy.</p>
+</li>
+<li>
+<p><code>[STR2]</code>: The new destination path for the copy.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Cannot copy root"</code>: You cannot copy the <code>/</code> directory.</p>
+</li>
+<li>
+<p><code>"Cannot copy a directory into itself"</code>: e.g., copying <code>/data</code> to <code>/data/backup</code>.</p>
+</li>
+<li>
+<p><code>"Source path not found"</code>: The item at <code>[STR]</code> doesn’t exist.</p>
+</li>
+<li>
+<p><code>"Invalid destination path"</code>: The <code>[STR2]</code> path is invalid.</p>
+</li>
+<li>
+<p><code>"Destination path already exists"</code>: An item at <code>[STR2]</code> already exists.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="rename-str-to-str2-overwrite-over"><code>rename [STR] to [STR2] (overwrite [OVER])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>rename [/path/to/source] to [/path/to/destination] (overwrite [false v])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Moves/renames a file or directory, with an option to overwrite the destination. This is similar to <code>move</code> but more powerful.</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li>
+<p><code>[STR]</code>: The source path of the item to move.</p>
+</li>
+<li>
+<p><code>[STR2]</code>: The new destination path.</p>
+</li>
+<li>
+<p><code>[OVER]</code>: A dropdown menu.</p>
+<ul>
+<li>
+<p><code>not recursively</code> (value: “false”): Will <strong>fail</strong> if the destination already exists.</p>
+</li>
+<li>
+<p><code>recursively</code> (value: “true”): Will <strong>delete</strong> the destination if it exists before renaming. (Note: The menu text is non-intuitive, but “true” means overwrite).</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Cannot rename root"</code>, <code>"Cannot rename a directory into itself"</code>, <code>"Source path not found"</code>, <code>"Invalid destination path"</code>.</p>
+</li>
+<li>
+<p><code>"Destination path already exists"</code>: (Only if <code>OVER</code> is “false” and <code>[STR2]</code> exists).</p>
+</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="🔍-filesystem-inspection">🔍 Filesystem Inspection</h3>
+<p>These blocks get information <em>about</em> files and directories.</p>
+<h4 id="list-type-in-str"><code>(list [TYPE] in [STR])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(list [both v] in [/])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns a JSON-formatted list of items inside a directory.</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li>
+<p><code>[TYPE]</code>: A dropdown menu:</p>
+<ul>
+<li>
+<p><code>files</code>: List only files.</p>
+</li>
+<li>
+<p><code>directories</code>: List only directories.</p>
+</li>
+<li>
+<p><code>both</code>: List files and directories.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><code>[STR]</code>: The full path of the directory to list.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - A JSON string array of full paths.</p>
+<ul>
+<li>
+<p>Example: <code>["/data/file1.txt", "/data/subdir"]</code></p>
+</li>
+<li>
+<p>If the directory is empty or an error occurs, it returns <code>"[]"</code>.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Path not found"</code>: The directory at <code>[STR]</code> does not exist.</p>
+</li>
+<li>
+<p><code>"Path is a file"</code>: The path points to a file, not a directory.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="path-str-exists"><code>&lt;path [STR] exists?&gt;</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>&lt;path [/path/to/file.txt] exists?&gt;</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Boolean</p>
+</li>
+<li>
+<p><strong>Description:</strong> Checks if a file or directory exists at the given path.</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The path to check.</li>
+</ul>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>true</code> if the path exists, <code>false</code> otherwise.</p>
+</li>
+</ul>
+<h4 id="get-type-of-path-str"><code>(get type of path [STR])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(get type of path [/path/to/file.txt])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the type of the item at the specified path.</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The path to check.</li>
+</ul>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - One of three values:</p>
+<ul>
+<li>
+<p><code>"file"</code></p>
+</li>
+<li>
+<p><code>"directory"</code></p>
+</li>
+<li>
+<p><code>"none"</code> (if the path does not exist)</p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="touch-str"><code>touch [STR]</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>touch [/path/to/file.txt]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Updates the “modification time” of a file or directory to the current time.</p>
+<ul>
+<li>If the file <strong>does not exist</strong>, this block will <strong>create it</strong> as an empty file (just like <code>create file</code>).</li>
+</ul>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The path to “touch”.</li>
+</ul>
+</li>
+</ul>
+<h4 id="get-size-of-str"><code>(get size of [STR])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(get size of [/path/to/file.txt])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Gets the “size” of an item. The meaning of “size” depends on the type:</p>
+<ul>
+<li>
+<p><strong>File:</strong> Returns the size of the content in <strong>bytes</strong> (e.g., “hello” is 5).</p>
+</li>
+<li>
+<p><strong>Directory:</strong> Returns the number of <strong>immediate children</strong> in the directory (it is <em>not</em> a recursive size).</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The path to the item.</li>
+</ul>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>number</code> - The size. Returns <code>0</code> if the path is not found.</p>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li><code>"Path not found"</code>: The item does not exist.</li>
+</ul>
+</li>
+</ul>
+<h4 id="get-creation-time-of-str"><code>(get creation time of [STR])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(get creation time of [/path/to/file.txt])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the timestamp (in milliseconds) of when the file or directory was first created.</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The path to the item.</li>
+</ul>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>number</code> - The creation timestamp. Returns <code>0</code> on error.</p>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li><code>"Path not found"</code></li>
+</ul>
+</li>
+</ul>
+<h4 id="get-modification-time-of-str"><code>(get modification time of [STR])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(get modification time of [/path/to/file.txt])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the timestamp (in milliseconds) of when the file or directory was last modified (e.g., by <code>write</code>, <code>append</code>, <code>touch</code>, or <code>rename</code>).</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The path to the item.</li>
+</ul>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>number</code> - The modification timestamp. Returns <code>0</code> on error.</p>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li><code>"Path not found"</code></li>
+</ul>
+</li>
+</ul>
+<h4 id="set-permissions-of-str-to-mode-octal-depth-depth"><code>set permissions of [STR] to [MODE] (octal) depth [DEPTH]</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>set permissions of [/path/to/file.txt] to [755] (octal) depth [-1]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> Sets the (simulated) permissions for a file or directory.</p>
+<blockquote>
+<p><strong>Note:</strong> These permissions are just metadata. They are <strong>not enforced</strong>. A file with “000” (no permissions) can still be read and written to.</p>
+</blockquote>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li>
+<p><code>[STR]</code>: The path to the item.</p>
+</li>
+<li>
+<p><code>[MODE]</code>: An octal permission string (e.g., <code>755</code>, <code>644</code>).</p>
+</li>
+<li>
+<p><code>[DEPTH]</code>: How deep to apply the change (for directories):</p>
+<ul>
+<li>
+<p><code>0</code>: Apply to this item only.</p>
+</li>
+<li>
+<p><code>1</code>, <code>2</code>,…: Apply to this item and children <em>n</em> levels deep.</p>
+</li>
+<li>
+<p><code>-1</code> (or blank): Apply recursively to this item and <strong>all</strong> children.</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Path not found"</code></p>
+</li>
+<li>
+<p><code>"Invalid permission mode"</code></p>
+</li>
+<li>
+<p><code>"Invalid depth"</code></p>
+</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="🔧-path-utilities">🔧 Path Utilities</h3>
+<p>These are helper blocks for working with path strings. They do not interact with the filesystem.</p>
+<h4 id="join-path-str-with-str2"><code>(join path [STR] with [STR2])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(join path [/path/to] with [file.txt])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Safely joins two path components into one.</p>
+</li>
+<li>
+<p><strong>Example:</strong> <code>(join path [/path/to/] with [/file.txt])</code> returns <code>/path/to/file.txt</code>.</p>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - The combined path.</p>
+</li>
+</ul>
+<h4 id="get-basename-of-str"><code>(get basename of [STR])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(get basename of [/path/to/file.txt])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the last part of a path (the filename or directory name).</p>
+</li>
+<li>
+<p><strong>Example:</strong> <code>(get basename of [/path/to/file.txt])</code> returns <code>file.txt</code>.</p>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - The basename.</p>
+</li>
+</ul>
+<h4 id="get-dirname-of-str"><code>(get dirname of [STR])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(get dirname of [/path/to/file.txt])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the parent directory portion of a path.</p>
+</li>
+<li>
+<p><strong>Example:</strong> <code>(get dirname of [/path/to/file.txt])</code> returns <code>/path/to</code>.</p>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - The directory name.</p>
+</li>
+</ul>
+<h4 id="get-extension-of-str"><code>(get extension of [STR])</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(get extension of [/path/to/file.txt])</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the file extension, including the dot.</p>
+</li>
+<li>
+<p><strong>Example 1:</strong> <code>(get extension of [file.txt])</code> returns <code>.txt</code>.</p>
+</li>
+<li>
+<p><strong>Example 2:</strong> <code>(get extension of [archive.tar.gz])</code> returns <code>.gz</code>.</p>
+</li>
+<li>
+<p><strong>Example 3:</strong> <code>(get extension of [.config])</code> returns <code>""</code> (Unix-style “dotfiles” have no extension).</p>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - The extension.</p>
+</li>
+</ul>
+<hr>
+<h3 id="💾-filesystem-management">💾 Filesystem Management</h3>
+<p>These blocks are for saving and loading your entire filesystem.</p>
+<h4 id="clear-the-file-system"><code>clear the file system</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>clear the file system</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> <strong>Deletes everything.</strong> Wipes the entire filesystem and resets it to a single empty root (<code>/</code>) directory.</p>
+</li>
+</ul>
+<h4 id="import-file-system-from-str"><code>import file system from [STR]</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>import file system from [N4Igzg9grgTgxgUwCoE8AOD... ]</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Command</p>
+</li>
+<li>
+<p><strong>Description:</strong> <strong>Completely replaces</strong> the current filesystem with the one from the provided string. This string should come from the <code>(export file system)</code> block.</p>
+</li>
+<li>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>[STR]</code>: The compressed, Base64-encoded filesystem string.</li>
+</ul>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li>
+<p><code>"Decompression failed (null)"</code></p>
+</li>
+<li>
+<p><code>"Failed to parse FS JSON"</code></p>
+</li>
+<li>
+<p><code>"Invalid FS data structure"</code></p>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="export-file-system"><code>(export file system)</code></h4>
+<ul>
+<li>
+<p><strong>Block:</strong> <code>(export file system)</code></p>
+</li>
+<li>
+<p><strong>Type:</strong> Reporter</p>
+</li>
+<li>
+<p><strong>Description:</strong> This is the <strong>SAVE</strong> block. It takes the entire current filesystem, compresses it (using LZString), and encodes it into a Base64 string. You must save this string to make your filesystem permanent.</p>
+</li>
+<li>
+<p><strong>Returns:</strong> <code>string</code> - A very long string representing your entire filesystem.</p>
+</li>
+<li>
+<p><strong>Error States:</strong></p>
+<ul>
+<li><code>"Failed to stringify or compress FS"</code></li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="common-workflows--examples">3. Common Workflows &amp; Examples</h2>
+<h3 id="workflow-saving-and-loading">Workflow: Saving and Loading</h3>
+<p>This is the most critical workflow.</p>
+<p><strong>To Save Your Work:</strong></p>
 <ol>
-<li><strong>Queue Entry:</strong> Sprite A’s write request enters the queue.</li>
-<li><strong>Execution:</strong> Sprite A completes the transaction successfully.</li>
-<li><strong>Queue Entry:</strong> Sprite B’s write request enters the queue.</li>
-<li><strong>Execution:</strong> Sprite B completes successfully.</li>
+<li>
+<p>Do all your file operations (<code>write</code>, <code>create directory</code>, etc.).</p>
+</li>
+<li>
+<p>When ready to save (e.g., user clicks a “Save” button), run <code>(export file system)</code>.</p>
+</li>
+<li>
+<p>Store the resulting string. You can:</p>
+<ul>
+<li>
+<p>Add it to a list (if it fits).</p>
+</li>
+<li>
+<p>Store it in a cloud variable (if it’s under the 256-char limit, which is unlikely for a complex FS).</p>
+</li>
+<li>
+<p>Have the user download it (using other extensions) or copy-paste it.</p>
+</li>
+</ul>
+</li>
 </ol>
-<p>This guarantee means you can safely initiate multiple LiFS blocks inside forever loops, parallel scripts, or from many clones without needing to add manual <code>wait 0 seconds</code> blocks or complex inter-sprite messaging systems to manage database access.</p>
-<h3 id="robust-error-handling-and-debugging">3. Robust Error Handling and Debugging</h3>
-<p>The <code>last LiFS error</code> block is your primary debugging tool. Since LiFS commands are placed in the queue, errors are <em>asynchronous</em>.</p>
-<p><strong>Debugging Workflow:</strong></p>
-<ol>
-<li>Call a LiFS command (e.g., <code>delete item at /non_existent_path</code>).</li>
-<li>Wait a short time (e.g., <code>wait 0.1 seconds</code>).</li>
-<li>Check the <code>last LiFS error</code> block.</li>
-</ol>
-<p>Common Errors You May Encounter:</p>
+<p>Code snippet</p>
+<pre><code>when [save v] key pressed
+set [saved_fs v] to (export file system)
+say [Filesystem saved!]
 
-<table>
-<thead>
-<tr>
-<th align="left">Error Message</th>
-<th align="left">Implication</th>
-<th align="left">Developer Fix</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td align="left"><code>"Directory not found: [PATH]"</code></td>
-<td align="left">You tried to create a file, but the parent folder doesn’t exist.</td>
-<td align="left">Use <code>create directory at [Parent Path]</code> first.</td>
-</tr>
-<tr>
-<td align="left"><code>"Item is a directory, content not allowed."</code></td>
-<td align="left">You tried to use <code>create file...</code> on a path that is already a folder.</td>
-<td align="left">Use <code>delete item</code> first if you want to overwrite the folder with a file.</td>
-</tr>
-<tr>
-<td align="left"><code>"Cannot rename/move item to an existing path."</code></td>
-<td align="left">The <code>NEW_PATH</code> already contains a file/folder and cannot be overwritten.</td>
-<td align="left">Delete the item at <code>NEW_PATH</code> first.</td>
-</tr>
-<tr>
-<td align="left"><code>"Cannot delete root directory."</code></td>
-<td align="left">You attempted to delete <code>/</code>.</td>
-<td align="left">This is a safety feature; use <code>delete all LiFS data (reset)</code> instead.</td>
-</tr>
-</tbody>
-</table><h3 id="storage-limits-isolation-and-persistence">4. Storage Limits, Isolation, and Persistence</h3>
-<p><strong>Storage Limits:</strong><br>
-While IndexedDB is vast, it is still subject to the browser’s disk space quotas. Typically, modern browsers offer many gigabytes of storage, far exceeding the needs of any Scratch project. LiFS handles all data sizing and storage automatically; you just need to be mindful of saving extremely large, complex strings frequently.</p>
-<p><strong>Data Isolation:</strong><br>
-The use of the <code>namespace</code> is crucial. Data stored in <code>namespace A</code> is completely inaccessible from a project loading <code>namespace B</code>. This ensures data from different games or different users does not conflict.</p>
-<p><strong>Persistence:</strong><br>
-Data is persistent across browser restarts and computer shutdowns. However, LiFS data is deleted if the user manually <strong>clears their browser’s site data or cache</strong>. It is essential to educate users on this distinction, which is why the <strong>Export/Import</strong> blocks are provided for user-managed backups. If the browser is in “Private/Incognito” mode, IndexedDB storage may be temporarily cleared upon closing the window.</p>
+</code></pre>
+<p><strong>To Load Your Work:</strong></p>
+<ol>
+<li>
+<p>When the project starts (or the user clicks “Load”), get the saved string.</p>
+</li>
+<li>
+<p>Use the <code>import file system from []</code> block to restore it.</p>
+</li>
+</ol>
+<p>Code snippet</p>
+<pre><code>when green flag clicked
+import file system from (saved_fs)
+if &lt;(last error) = []&gt; then
+  say [Filesystem loaded!]
+else
+  say [Failed to load filesystem!]
+end
+
+</code></pre>
+<h3 id="example-creating-a-user-profile">Example: Creating a User Profile</h3>
+<p>This example shows how to create a file, write to it, read from it, and check for errors.</p>
+<p>Code snippet</p>
+<pre><code>define setup_user (username, real_name)
+  set [path v] to (join path [/users] with (username))
+  create directory (path)
+  
+  set [profile_path v] to (join path (path) with [profile.txt])
+  write (real_name) to file (profile_path)
+  
+  if &lt;(last error) = []&gt; then
+    say (join [Created profile for ] (real_name))
+  else
+    say (join [Error setting up user: ] (last error))
+  end
+
+define read_user (username)
+  set [path v] to (join path [/users] with (username))
+  set [profile_path v] to (join path (path) with [profile.txt])
+  
+  set [real_name v] to (read file (profile_path))
+  
+  if &lt;(last error) = []&gt; then
+    say (join [Username: ] (username))
+    say (join [Real Name: ] (real_name))
+  else
+    say (join [Error reading user: ] (last error))
+  end
+  
+when green flag clicked
+  clear the file system
+  setup_user [griffpatch] [Griffpatch]
+  read_user [griffpatch]
+
+</code></pre>
 
     </div>
   </div>
