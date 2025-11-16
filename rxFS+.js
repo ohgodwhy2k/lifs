@@ -1,5 +1,5 @@
 // Name: rxFS+
-// ID: lithsoft.rxfsplus
+// ID: rxFSplus
 // Description: Blocks for interacting with a Unix-like integrated filesystem in-memory. Like rxFS, but better.
 // By: ohgodwhy2k
 // License: Creative Commons Zero v1.0
@@ -677,7 +677,7 @@
 
     getInfo() {
       return {
-        id: "0832rxfsPlus",
+        id: "rxFSplus",
         name: "rxFS+",
         color1: "#192d50",
         color2: "#192d50",
